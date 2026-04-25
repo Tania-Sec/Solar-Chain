@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/", "destination": "/solarchain-landing.html" },
+    { "source": "/(.*)", "destination": "/solarchain-landing.html" }
+  ]
+}
