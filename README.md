@@ -43,9 +43,9 @@ Vecino con paneles          SolarChain MX           Vecino comprador
 
 | Red | Dirección |
 |-----|-----------|
-| Monad Testnet | [`0x4bf84cfff9B97E1854211F28D26eb8dBF7DA384c`](https://testnet.monadvision.com/address/0x4bf84cfff9B97E1854211F28D26eb8dBF7DA384c) |
+| Monad Testnet | [`0x4bf84cfff9B97E1854211F28D26eb8dBF7DA384c`](https://monad-testnet.socialscan.io/address/0x4bf84cfff9B97E1854211F28D26eb8dBF7DA384c) |
 
-TX de deploy: [`0x7302666f...`](https://testnet.monadvision.com/tx/0x7302666fade7597d8566f5ffe31a40270b622efe5172fb3db56c86495971564d)
+TX de deploy: [`0x7302666f...`](https://monad-testnet.socialscan.io/tx/0x7302666fade7597d8566f5ffe31a40270b622efe5172fb3db56c86495971564d)
 
 ---
 
