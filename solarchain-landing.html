@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SolarChain MX — Energía Solar entre Vecinos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+<!-- ethers v6 CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+
+<style>
+/* ── TOKENS ──────────────────────────────────────────────── */
+:root {
+  --sol:     #F5A623;
+  --sol-dim: #C47A0C;
+  --volt:    #B8FF2E;
+  --dark:    #0A0E06;
+  --surface: #111507;
+  --card:    #161C08;
+  --border:  #2A3510;
+  --text:    #E8F0C8;
+  --muted:   #6B7A4A;
+  --danger:  #FF4545;
+  --font-display: 'Syne', sans-serif;
+  --font-mono:    'Space Mono', monospace;
+}
+
+/* ── RESET ───────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--dark);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  overflow-x: hidden;
+  cursor: crosshair;
+}
+a { color: var(--sol); text-decoration: none; }
+
+/* ── NOISE OVERLAY ───────────────────────────────────────── */
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 999;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  opacity: .4;
+}
+
+/* ── TOAST ───────────────────────────────────────────────── */
+.sc-toast {
+  position: fixed; bottom: 24px; right: 24px; z-index: 1000;
+  background: var(--card); border: 1px solid var(--border);
+  color: var(--text); font-family: var(--font-mono); font-size: 13px;
+  padding: 12px 20px; max-width: 340px;
+  transform: translateY(80px); opacity: 0;
+  transition: all .3s cubic-bezier(.175,.885,.32,1.275);
+}
+.sc-toast--visible  { transform: translateY(0); opacity: 1; }
+.sc-toast--success  { border-color: var(--volt); color: var(--volt); }
+.sc-toast--error    { border-color: var(--danger); color: var(--danger); }
+
+/* ── HEADER ──────────────────────────────────────────────── */
+header {
+  position: sticky; top: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 40px;
+  background: rgba(10,14,6,.9);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+  animation: fadeDown .6s ease both;
+}
+.logo {
+  font-family: var(--font-display);
+  font-size: 22px; font-weight: 800;
+  letter-spacing: -.5px;
+}
+.logo span { color: var(--sol); }
+nav { display: flex; gap: 32px; align-items: center; }
+nav a {
+  color: var(--muted); font-size: 12px; text-transform: uppercase;
+  letter-spacing: 2px; transition: color .2s;
+}
+nav a:hover { color: var(--volt); }
+.btn-wallet {
+  background: var(--sol); color: #000;
+  border: none; padding: 10px 20px;
+  font-family: var(--font-mono); font-size: 12px; font-weight: 700;
+  cursor: pointer; text-transform: uppercase; letter-spacing: 1px;
+  transition: background .2s, transform .1s;
+}
+.btn-wallet:hover  { background: var(--volt); }
+.btn-wallet:active { transform: scale(.97); }
+#sc-wallet-addr {
+  font-size: 11px; color: var(--volt); margin-left: 8px;
+  font-family: var(--font-mono);
+}
+
+/* ── HERO ────────────────────────────────────────────────── */
+.hero {
+  min-height: 92vh;
+  display: grid; place-items: center;
+  text-align: center;
+  padding: 80px 24px;
+  position: relative;
+  overflow: hidden;
+}
+.hero-bg {
+  position: absolute; inset: 0; z-index: 0;
+  background:
+    radial-gradient(ellipse 60% 60% at 50% 10%, rgba(245,166,35,.12) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 40% at 80% 80%, rgba(184,255,46,.06) 0%, transparent 60%);
+}
+.sun-orb {
+  position: absolute; top: -80px; left: 50%; transform: translateX(-50%);
+  width: 320px; height: 320px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(245,166,35,.3) 0%, rgba(245,166,35,.05) 50%, transparent 70%);
+  animation: pulse 4s ease-in-out infinite;
+}
+.sun-orb::before {
+  content: ''; position: absolute; inset: 20px; border-radius: 50%;
+  border: 1px solid rgba(245,166,35,.2);
+  animation: spin 20s linear infinite;
+}
+.sun-orb::after {
+  content: ''; position: absolute; inset: 50px; border-radius: 50%;
+  border: 1px dashed rgba(245,166,35,.1);
+  animation: spin 30s linear infinite reverse;
+}
+.hero-content { position: relative; z-index: 1; max-width: 780px; }
+.hero-tag {
+  display: inline-block;
+  border: 1px solid var(--border); color: var(--muted);
+  font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
+  padding: 6px 16px; margin-bottom: 24px;
+  animation: fadeUp .6s .2s ease both;
+}
+h1 {
+  font-family: var(--font-display); font-size: clamp(42px, 8vw, 88px);
+  font-weight: 800; line-height: .95; letter-spacing: -3px;
+  animation: fadeUp .6s .3s ease both;
+}
+h1 .accent { color: var(--sol); display: block; }
+h1 .volt   { color: var(--volt); }
+.hero-sub {
+  margin: 24px auto; max-width: 480px; line-height: 1.7;
+  color: var(--muted); font-size: 14px;
+  animation: fadeUp .6s .4s ease both;
+}
+.hero-cta {
+  display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;
+  margin-top: 40px;
+  animation: fadeUp .6s .5s ease both;
+}
+.btn-primary {
+  background: var(--sol); color: #000;
+  border: none; padding: 16px 36px;
+  font-family: var(--font-mono); font-size: 13px; font-weight: 700;
+  cursor: pointer; text-transform: uppercase; letter-spacing: 1.5px;
+  transition: background .2s, transform .1s;
+}
+.btn-primary:hover  { background: var(--volt); }
+.btn-primary:active { transform: scale(.97); }
+.btn-outline {
+  background: transparent; color: var(--text);
+  border: 1px solid var(--border); padding: 16px 36px;
+  font-family: var(--font-mono); font-size: 13px;
+  cursor: pointer; text-transform: uppercase; letter-spacing: 1.5px;
+  transition: border-color .2s, color .2s;
+}
+.btn-outline:hover { border-color: var(--sol); color: var(--sol); }
+.hero-stats {
+  display: flex; gap: 48px; justify-content: center; margin-top: 72px;
+  border-top: 1px solid var(--border); padding-top: 40px;
+  animation: fadeUp .6s .6s ease both;
+}
+.stat-val {
+  font-family: var(--font-display); font-size: 36px; font-weight: 800;
+  color: var(--sol);
+}
+.stat-label { font-size: 11px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-top: 4px; }
+
+/* ── SECCIÓN GENÉRICA ────────────────────────────────────── */
+section { padding: 100px 40px; max-width: 1100px; margin: 0 auto; }
+.section-tag {
+  font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
+  color: var(--sol); margin-bottom: 16px;
+}
+.section-title {
+  font-family: var(--font-display); font-size: clamp(28px, 4vw, 48px);
+  font-weight: 800; letter-spacing: -1px; line-height: 1.1;
+  margin-bottom: 48px;
+}
+.divider {
+  height: 1px; background: var(--border);
+  margin: 0 40px;
+}
+
+/* ── HOW IT WORKS ────────────────────────────────────────── */
+.steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1px; background: var(--border);
+}
+.step {
+  background: var(--surface); padding: 40px 32px;
+  transition: background .2s;
+}
+.step:hover { background: var(--card); }
+.step-num {
+  font-family: var(--font-display); font-size: 64px; font-weight: 800;
+  color: var(--border); line-height: 1; margin-bottom: 16px;
+}
+.step:hover .step-num { color: var(--sol); transition: color .2s; }
+.step h3 { font-family: var(--font-display); font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+.step p  { color: var(--muted); line-height: 1.6; font-size: 13px; }
+
+/* ── APP TABS ────────────────────────────────────────────── */
+.tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 32px; gap: 0; }
+.tab-btn {
+  background: none; border: none; color: var(--muted);
+  font-family: var(--font-mono); font-size: 12px; text-transform: uppercase;
+  letter-spacing: 2px; padding: 14px 28px; cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: color .2s, border-color .2s;
+}
+.tab-btn.active { color: var(--sol); border-bottom-color: var(--sol); }
+.tab-btn:hover  { color: var(--text); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ── CARDS FORMULARIO ────────────────────────────────────── */
+.form-card {
+  background: var(--card); border: 1px solid var(--border);
+  padding: 36px; max-width: 560px;
+}
+.form-row { margin-bottom: 20px; }
+.form-row label {
+  display: block; font-size: 11px; text-transform: uppercase;
+  letter-spacing: 2px; color: var(--muted); margin-bottom: 8px;
+}
+.form-row input, .form-row select {
+  width: 100%; background: var(--surface); border: 1px solid var(--border);
+  color: var(--text); font-family: var(--font-mono); font-size: 14px;
+  padding: 12px 16px; outline: none;
+  transition: border-color .2s;
+}
+.form-row input:focus { border-color: var(--sol); }
+.form-hint { font-size: 11px; color: var(--muted); margin-top: 6px; }
+.quote-box {
+  background: var(--surface); border: 1px solid var(--border);
+  padding: 20px; margin: 20px 0; display: none;
+}
+.quote-box.visible { display: block; }
+.quote-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+.quote-row .val { color: var(--volt); font-weight: 700; }
+.quote-total .val { color: var(--sol); font-size: 16px; }
+
+/* ── MARKETPLACE TABLE ───────────────────────────────────── */
+.market-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 20px;
+}
+.refresh-btn {
+  background: none; border: 1px solid var(--border); color: var(--muted);
+  font-family: var(--font-mono); font-size: 11px; padding: 8px 16px;
+  cursor: pointer; text-transform: uppercase; letter-spacing: 1px;
+  transition: all .2s;
+}
+.refresh-btn:hover { border-color: var(--sol); color: var(--sol); }
+.listings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1px; background: var(--border);
+}
+.listing-card {
+  background: var(--card); padding: 24px;
+  display: flex; flex-direction: column; gap: 12px;
+  transition: background .2s;
+}
+.listing-card:hover { background: var(--surface); }
+.listing-id   { font-size: 11px; color: var(--muted); letter-spacing: 2px; }
+.listing-kwh  { font-family: var(--font-display); font-size: 36px; font-weight: 800; color: var(--text); }
+.listing-kwh span { font-size: 14px; font-weight: 400; color: var(--muted); }
+.listing-price { color: var(--sol); font-weight: 700; }
+.listing-vendor { font-size: 11px; color: var(--muted); }
+.btn-comprar {
+  background: var(--volt); color: #000;
+  border: none; padding: 10px; width: 100%;
+  font-family: var(--font-mono); font-size: 12px; font-weight: 700;
+  cursor: pointer; text-transform: uppercase; letter-spacing: 1px;
+  margin-top: auto; transition: opacity .2s;
+}
+.btn-comprar:hover { opacity: .85; }
+.empty-state {
+  grid-column: 1/-1; text-align: center;
+  padding: 60px; color: var(--muted); font-size: 13px;
+}
+
+/* ── SIMULADOR ───────────────────────────────────────────── */
+.simulator {
+  background: var(--card); border: 1px solid var(--border); padding: 40px;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 40px;
+}
+@media (max-width: 640px) { .simulator { grid-template-columns: 1fr; } }
+.sim-input-group { display: flex; flex-direction: column; gap: 16px; }
+input[type=range] {
+  -webkit-appearance: none; width: 100%; height: 2px;
+  background: var(--border); outline: none;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 16px; height: 16px;
+  background: var(--sol); border-radius: 50%; cursor: pointer;
+}
+.range-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.range-val { color: var(--sol); font-weight: 700; font-family: var(--font-display); font-size: 20px; }
+.sim-results { display: flex; flex-direction: column; gap: 16px; justify-content: center; }
+.sim-metric { border-left: 2px solid var(--border); padding-left: 16px; }
+.sim-metric.highlight { border-color: var(--volt); }
+.sim-metric-val {
+  font-family: var(--font-display); font-size: 28px; font-weight: 800;
+  color: var(--text);
+}
+.sim-metric.highlight .sim-metric-val { color: var(--volt); }
+.sim-metric-label { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+
+/* ── MODELO DE NEGOCIO ───────────────────────────────────── */
+.biz-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1px;
+  background: var(--border);
+}
+.biz-card {
+  background: var(--surface); padding: 32px 28px;
+}
+.biz-icon { font-size: 28px; margin-bottom: 12px; }
+.biz-card h4 {
+  font-family: var(--font-display); font-size: 16px; font-weight: 700;
+  margin-bottom: 8px;
+}
+.biz-card p { color: var(--muted); font-size: 12px; line-height: 1.7; }
+.biz-num {
+  font-family: var(--font-display); font-size: 32px; font-weight: 800;
+  color: var(--sol); display: block; margin-top: 12px;
+}
+
+/* ── TECH STACK ──────────────────────────────────────────── */
+.tech-list {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px;
+}
+.tech-item {
+  border: 1px solid var(--border); padding: 16px 20px;
+  font-size: 12px; display: flex; align-items: center; gap: 12px;
+  transition: border-color .2s;
+}
+.tech-item:hover { border-color: var(--sol); }
+.tech-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--volt); flex-shrink: 0; }
+
+/* ── FOOTER ──────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 40px; text-align: center;
+  color: var(--muted); font-size: 12px;
+}
+footer strong { color: var(--sol); }
+
+/* ── ANIMACIONES ─────────────────────────────────────────── */
+@keyframes fadeUp   { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
+@keyframes fadeDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
+@keyframes pulse    { 0%,100% { opacity: .7; } 50% { opacity: 1; } }
+@keyframes spin     { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- TOAST -->
+<div id="sc-toast" class="sc-toast"></div>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">Solar<span>Chain</span> MX</div>
+  <nav>
+    <a href="#como-funciona">Cómo funciona</a>
+    <a href="#app">App</a>
+    <a href="#modelo">Modelo</a>
+    <a href="#tech">Tech</a>
+  </nav>
+  <div style="display:flex;align-items:center">
+    <button class="btn-wallet" id="sc-wallet-btn" onclick="conectarWalletUI()">
+      Conectar Wallet
+    </button>
+    <span id="sc-wallet-addr"></span>
+  </div>
+</header>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-bg"></div>
+  <div class="sun-orb"></div>
+  <div class="hero-content">
+    <div class="hero-tag">⚡ P2P Energy · Blockchain · México</div>
+    <h1>
+      Tu sol,<br>
+      <span class="accent">su</span>
+      luz<span class="volt">.</span>
+    </h1>
+    <p class="hero-sub">
+      Vende tu excedente solar a vecinos. Compra energía limpia más barata que CFE.
+      Todo on-chain, sin intermediarios, con MetaMask.
+    </p>
+    <div class="hero-cta">
+      <button class="btn-primary" onclick="document.getElementById('app').scrollIntoView({behavior:'smooth'})">
+        Entrar al marketplace
+      </button>
+      <button class="btn-outline" onclick="document.getElementById('como-funciona').scrollIntoView({behavior:'smooth'})">
+        Ver cómo funciona
+      </button>
+    </div>
+    <div class="hero-stats">
+      <div>
+        <div class="stat-val" id="stat-listings">0</div>
+        <div class="stat-label">Ofertas activas</div>
+      </div>
+      <div>
+        <div class="stat-val">8%</div>
+        <div class="stat-label">Comisión plataforma</div>
+      </div>
+      <div>
+        <div class="stat-val">~$3.20</div>
+        <div class="stat-label">Ahorro por kWh vs CFE</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- CÓMO FUNCIONA -->
+<section id="como-funciona">
+  <div class="section-tag">// proceso</div>
+  <div class="section-title">Cómo funciona</div>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">01</div>
+      <h3>Conecta tu wallet</h3>
+      <p>Usa MetaMask con Sepolia testnet (o Monad). Tu wallet es tu identidad, sin registro.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">02</div>
+      <h3>Publica excedente</h3>
+      <p>Ingresa tus kWh disponibles y precio. El smart contract crea la oferta en blockchain.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">03</div>
+      <h3>Vecino compra</h3>
+      <p>Cualquiera puede ver el marketplace y comprar kWh. El pago va directo al vendedor (92%).</p>
+    </div>
+    <div class="step">
+      <div class="step-num">04</div>
+      <h3>Descuento en CFE</h3>
+      <p>Los kWh comprados se acreditan on-chain. Integrable con API CFE para descuento automático.</p>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- APP -->
+<section id="app">
+  <div class="section-tag">// demo en vivo</div>
+  <div class="section-title">Marketplace</div>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="cambiarTab('marketplace')">🌐 Marketplace</button>
+    <button class="tab-btn" onclick="cambiarTab('vendedor')">🌞 Vender energía</button>
+    <button class="tab-btn" onclick="cambiarTab('comprador')">⚡ Comprar energía</button>
+    <button class="tab-btn" onclick="cambiarTab('simulador')">📊 Simulador</button>
+  </div>
+
+  <!-- MARKETPLACE -->
+  <div class="tab-panel active" id="tab-marketplace">
+    <div class="market-header">
+      <div style="font-size:13px;color:var(--muted)">Ofertas activas en blockchain</div>
+      <button class="refresh-btn" onclick="cargarListings()">↻ Actualizar</button>
+    </div>
+    <div class="listings-grid" id="listings-container">
+      <div class="empty-state">Conecta tu wallet para ver las ofertas en tiempo real.<br>
+      <br>O <a href="#" onclick="cargarListingsDemo()">carga datos de demo</a>.</div>
+    </div>
+  </div>
+
+  <!-- VENDEDOR -->
+  <div class="tab-panel" id="tab-vendedor">
+    <div class="form-card">
+      <p style="color:var(--muted);font-size:13px;margin-bottom:24px;line-height:1.7">
+        Publica tu excedente solar. Recibirás el <strong style="color:var(--volt)">92%</strong> de cada venta directamente en tu wallet.
+      </p>
+      <div class="form-row">
+        <label>kWh disponibles</label>
+        <input type="number" id="v-kwh" placeholder="ej. 50" min="1">
+        <div class="form-hint">¿Cuántos kWh de excedente tienes este mes?</div>
+      </div>
+      <div class="form-row">
+        <label>Precio por kWh (ETH)</label>
+        <input type="number" id="v-precio" placeholder="ej. 0.0005" step="0.0001" min="0.0001">
+        <div class="form-hint">Referencia: tarifa DAC CFE ≈ $5.20 MXN/kWh</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);padding:16px;margin:20px 0;font-size:12px;color:var(--muted)">
+        <strong style="color:var(--text)">Estimado de ganancia:</strong>
+        <span id="v-estimado" style="color:var(--volt);font-weight:700;float:right">—</span>
+      </div>
+      <button class="btn-primary" style="width:100%" onclick="handlePublicar()">
+        🌞 Publicar oferta en blockchain
+      </button>
+    </div>
+  </div>
+
+  <!-- COMPRADOR -->
+  <div class="tab-panel" id="tab-comprador">
+    <div class="form-card">
+      <p style="color:var(--muted);font-size:13px;margin-bottom:24px;line-height:1.7">
+        Compra kWh directamente de vecinos con paneles solares. Ahorra hasta un <strong style="color:var(--volt)">30%</strong> vs tarifa CFE.
+      </p>
+      <div class="form-row">
+        <label>ID del listing</label>
+        <input type="number" id="c-id" placeholder="ej. 1" min="1">
+        <div class="form-hint">Copia el ID de la oferta en el Marketplace.</div>
+      </div>
+      <div class="form-row">
+        <label>kWh a comprar</label>
+        <input type="number" id="c-kwh" placeholder="ej. 10" min="1">
+      </div>
+      <button class="btn-outline" style="width:100%;margin-bottom:12px" onclick="handleCotizar()">
+        📋 Cotizar
+      </button>
+      <div class="quote-box" id="quote-box">
+        <div class="quote-row"><span>kWh a comprar</span><span class="val" id="q-kwh">—</span></div>
+        <div class="quote-row"><span>Precio por kWh</span><span class="val" id="q-unitario">—</span></div>
+        <div class="quote-row"><span>Comisión plataforma (8%)</span><span class="val" id="q-comision">—</span></div>
+        <div class="quote-row quote-total" style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px">
+          <strong>Total a pagar</strong><span class="val" id="q-total">—</span>
+        </div>
+      </div>
+      <button class="btn-primary" style="width:100%" onclick="handleComprar()">
+        ⚡ Comprar energía
+      </button>
+      <div id="mi-balance" style="margin-top:20px;font-size:12px;color:var(--muted)">
+        Mi balance: <span style="color:var(--volt);font-weight:700" id="balance-kwh">—</span> kWh acreditados
+      </div>
+    </div>
+  </div>
+
+  <!-- SIMULADOR -->
+  <div class="tab-panel" id="tab-simulador">
+    <div class="simulator">
+      <div class="sim-input-group">
+        <div>
+          <div class="range-label">
+            <span>Paneles instalados</span>
+            <span class="range-val"><span id="s-paneles">6</span> paneles</span>
+          </div>
+          <input type="range" id="sl-paneles" min="1" max="20" value="6" oninput="simular()">
+        </div>
+        <div>
+          <div class="range-label">
+            <span>Horas sol diarias</span>
+            <span class="range-val"><span id="s-horas">5</span> h/día</span>
+          </div>
+          <input type="range" id="sl-horas" min="3" max="9" value="5" oninput="simular()">
+        </div>
+        <div>
+          <div class="range-label">
+            <span>Precio de venta</span>
+            <span class="range-val">$<span id="s-precio">3.50</span> MXN/kWh</span>
+          </div>
+          <input type="range" id="sl-precio" min="1" max="6" step="0.1" value="3.5" oninput="simular()">
+        </div>
+        <div>
+          <div class="range-label">
+            <span>Consumo propio</span>
+            <span class="range-val"><span id="s-consumo">40</span>%</span>
+          </div>
+          <input type="range" id="sl-consumo" min="0" max="90" step="5" value="40" oninput="simular()">
+        </div>
+      </div>
+      <div class="sim-results">
+        <div class="sim-metric">
+          <div class="sim-metric-val" id="r-kwh">—</div>
+          <div class="sim-metric-label">kWh generados/mes</div>
+        </div>
+        <div class="sim-metric">
+          <div class="sim-metric-val" id="r-excedente">—</div>
+          <div class="sim-metric-label">kWh excedente</div>
+        </div>
+        <div class="sim-metric highlight">
+          <div class="sim-metric-val" id="r-ingreso">—</div>
+          <div class="sim-metric-label">Ingreso mensual estimado</div>
+        </div>
+        <div class="sim-metric highlight">
+          <div class="sim-metric-val" id="r-anual">—</div>
+          <div class="sim-metric-label">Ingreso anual estimado</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- MODELO DE NEGOCIO -->
+<section id="modelo">
+  <div class="section-tag">// modelo de negocio</div>
+  <div class="section-title">Cómo gana SolarChain</div>
+  <div class="biz-grid">
+    <div class="biz-card">
+      <div class="biz-icon">⚡</div>
+      <h4>Comisión por transacción</h4>
+      <p>8% sobre cada compraventa de energía P2P realizada en el marketplace.</p>
+      <span class="biz-num">8%</span>
+    </div>
+    <div class="biz-card">
+      <div class="biz-icon">🌞</div>
+      <h4>Vendedor recibe</h4>
+      <p>92% del valor de venta va directo a la wallet del propietario del panel solar.</p>
+      <span class="biz-num">92%</span>
+    </div>
+    <div class="biz-card">
+      <div class="biz-icon">🏠</div>
+      <h4>Mercado potencial</h4>
+      <p>1.2M hogares con paneles solares en México para 2025. Promedio 150 kWh/mes de excedente.</p>
+      <span class="biz-num">$180M</span>
+    </div>
+    <div class="biz-card">
+      <div class="biz-icon">🔗</div>
+      <h4>Integración CFE</h4>
+      <p>Futura API con CFE para aplicar kWh on-chain directamente al recibo bimestral.</p>
+      <span class="biz-num">v2.0</span>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- TECH STACK -->
+<section id="tech">
+  <div class="section-tag">// stack tecnológico</div>
+  <div class="section-title">Infraestructura</div>
+  <div class="tech-list">
+    <div class="tech-item"><div class="tech-dot"></div>Solidity 0.8.28</div>
+    <div class="tech-item"><div class="tech-dot"></div>EVM Prague / Monad</div>
+    <div class="tech-item"><div class="tech-dot"></div>MetaMask</div>
+    <div class="tech-item"><div class="tech-dot"></div>ethers.js v6</div>
+    <div class="tech-item"><div class="tech-dot"></div>Smart Contracts</div>
+    <div class="tech-item"><div class="tech-dot"></div>Monad Testnet (10143)</div>
+    <div class="tech-item"><div class="tech-dot"></div>Foundry Deploy</div>
+    <div class="tech-item"><div class="tech-dot"></div>Pull Payment Pattern</div>
+    <div class="tech-item"><div class="tech-dot"></div>On-chain Events</div>
+    <div class="tech-item"><div class="tech-dot"></div>CFE API (roadmap)</div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div>SolarChain MX — <strong>Energía solar P2P en blockchain</strong></div>
+  <div style="margin-top:8px">Construido con ☀️ para México · Demo en Sepolia Testnet</div>
+</footer>
+
+<!-- WEB3 SCRIPT -->
+<script>
+// ── CONFIG (ACTUALIZAR DESPUÉS DEL DEPLOY) ────────────────
+const CONTRACT_ADDRESS  = "0xTU_CONTRATO_AQUI"; // ← reemplazar tras el deploy
+const EXPECTED_CHAIN_ID = 10143; // Monad Testnet
+const NETWORK_NAME      = "Monad Testnet";
+
+const ABI = [
+  "function crearListing(uint256 _kwhDisponibles, uint256 _precioPorKwh) returns (uint256)",
+  "function comprarEnergia(uint256 _listingId, uint256 _kwh) payable",
+  "function getListingsActivos() view returns (tuple(uint256 id, address vendedor, uint256 kwhDisponibles, uint256 precioPorKwh, uint8 estado, uint256 timestamp)[] activos)",
+  "function cotizar(uint256 _listingId, uint256 _kwh) view returns (uint256 costoTotal, uint256 comision, uint256 aVendedor)",
+  "function miBalanceKwh() view returns (uint256)",
+  "function misGanancias() view returns (uint256)",
+];
+
+let provider, signer, contrato, walletAddr;
+
+// ── TOAST ──────────────────────────────────────────────────
+function toast(msg, tipo = "info") {
+  const el = document.getElementById("sc-toast");
+  el.textContent = msg;
+  el.className = `sc-toast sc-toast--${tipo} sc-toast--visible`;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove("sc-toast--visible"), 4000);
+}
+
+// ── TABS ───────────────────────────────────────────────────
+function cambiarTab(nombre) {
+  document.querySelectorAll(".tab-btn").forEach((b,i) => {
+    b.classList.toggle("active", b.textContent.toLowerCase().includes(nombre) || (nombre === "marketplace" && i === 0));
+  });
+  document.querySelectorAll(".tab-panel").forEach(p => {
+    p.classList.toggle("active", p.id === `tab-${nombre}`);
+  });
+  // Si entramos al marketplace, cargar listings
+  if (nombre === "marketplace" && contrato) cargarListings();
+}
+
+// ── WALLET ─────────────────────────────────────────────────
+async function conectarWalletUI() {
+  if (!window.ethereum) {
+    toast("MetaMask no detectado. Instala la extensión.", "error");
+    return;
+  }
+  try {
+    await window.ethereum.request({ method: "eth_requestAccounts" });
+    provider = new ethers.BrowserProvider(window.ethereum);
+    signer   = await provider.getSigner();
+    walletAddr = await signer.getAddress();
+
+    const net = await provider.getNetwork();
+    if (Number(net.chainId) !== EXPECTED_CHAIN_ID) {
+      try {
+        await window.ethereum.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: "0x" + EXPECTED_CHAIN_ID.toString(16) }],
+        });
+        signer   = await provider.getSigner();
+        walletAddr = await signer.getAddress();
+      } catch {
+        toast(`Cambia manualmente a ${NETWORK_NAME} en MetaMask.`, "error");
+        return;
+      }
+    }
+
+    contrato = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+
+    document.getElementById("sc-wallet-btn").textContent  = "✅ Conectado";
+    document.getElementById("sc-wallet-addr").textContent = `${walletAddr.slice(0,6)}...${walletAddr.slice(-4)}`;
+    toast(`Wallet conectada: ${walletAddr.slice(0,6)}...${walletAddr.slice(-4)}`, "success");
+
+    cargarListings();
+    actualizarBalance();
+  } catch (e) {
+    if (e.code !== 4001) toast("Error al conectar: " + e.message, "error");
+  }
+}
+
+// ── LISTINGS ───────────────────────────────────────────────
+async function cargarListings() {
+  if (!contrato) { toast("Conecta tu wallet primero.", "error"); return; }
+  try {
+    const lista = await contrato.getListingsActivos();
+    renderListings(lista.map(l => ({
+      id:    Number(l.id),
+      kwh:   Number(l.kwhDisponibles),
+      precio: parseFloat(ethers.formatEther(l.precioPorKwh)).toFixed(6),
+      vendedor: l.vendedor,
+      fecha: new Date(Number(l.timestamp) * 1000).toLocaleDateString("es-MX")
+    })));
+    document.getElementById("stat-listings").textContent = lista.length;
+  } catch (e) {
+    toast("Error al cargar listings: " + e.message, "error");
+  }
+}
+
+function cargarListingsDemo() {
+  renderListings([
+    { id: 1, kwh: 50, precio: "0.000500", vendedor: "0xAbC1...2345", fecha: "24/04/2026" },
+    { id: 2, kwh: 30, precio: "0.000480", vendedor: "0xDeF6...7890", fecha: "24/04/2026" },
+    { id: 3, kwh: 80, precio: "0.000520", vendedor: "0x1A2B...3C4D", fecha: "23/04/2026" },
+  ]);
+  document.getElementById("stat-listings").textContent = 3;
+  return false;
+}
+
+function renderListings(lista) {
+  const el = document.getElementById("listings-container");
+  if (!lista.length) {
+    el.innerHTML = `<div class="empty-state">No hay ofertas activas en este momento.</div>`;
+    return;
+  }
+  el.innerHTML = lista.map(l => `
+    <div class="listing-card">
+      <div class="listing-id">LISTING #${l.id} · ${l.fecha}</div>
+      <div class="listing-kwh">${l.kwh} <span>kWh</span></div>
+      <div class="listing-price">${l.precio} ETH / kWh</div>
+      <div class="listing-vendor">🏠 ${typeof l.vendedor === 'string' ? l.vendedor.slice(0,10)+'...' : ''}</div>
+      <button class="btn-comprar" onclick="preseleccionarCompra(${l.id})">
+        ⚡ Comprar kWh
+      </button>
+    </div>
+  `).join("");
+}
+
+function preseleccionarCompra(id) {
+  document.getElementById("c-id").value = id;
+  cambiarTab("comprador");
+}
+
+// ── VENDEDOR ───────────────────────────────────────────────
+document.getElementById("v-kwh").addEventListener("input", actualizarEstimado);
+document.getElementById("v-precio").addEventListener("input", actualizarEstimado);
+
+function actualizarEstimado() {
+  const kwh    = parseFloat(document.getElementById("v-kwh").value)    || 0;
+  const precio = parseFloat(document.getElementById("v-precio").value) || 0;
+  const neto   = kwh * precio * 0.92;
+  document.getElementById("v-estimado").textContent =
+    neto > 0 ? `~${neto.toFixed(6)} ETH` : "—";
+}
+
+async function handlePublicar() {
+  const kwh    = parseInt(document.getElementById("v-kwh").value);
+  const precio = document.getElementById("v-precio").value;
+  if (!kwh || !precio) { toast("Completa todos los campos.", "error"); return; }
+  if (!contrato)        { toast("Conecta tu wallet primero.", "error"); return; }
+  try {
+    toast("⏳ Publicando oferta...", "info");
+    const tx = await contrato.crearListing(BigInt(kwh), ethers.parseEther(precio));
+    toast("⏳ Confirmando en blockchain...", "info");
+    await tx.wait();
+    toast("🌞 Oferta publicada exitosamente!", "success");
+    document.getElementById("v-kwh").value = "";
+    document.getElementById("v-precio").value = "";
+    cargarListings();
+  } catch (e) {
+    if (e.code === 4001) toast("Transacción cancelada.", "info");
+    else toast("Error: " + (e.reason || e.message), "error");
+  }
+}
+
+// ── COMPRADOR ──────────────────────────────────────────────
+async function handleCotizar() {
+  const id  = parseInt(document.getElementById("c-id").value);
+  const kwh = parseInt(document.getElementById("c-kwh").value);
+  if (!id || !kwh) { toast("Ingresa ID del listing y cantidad de kWh.", "error"); return; }
+  if (!contrato)   { toast("Conecta tu wallet primero.", "error"); return; }
+  try {
+    const [total, com, aVend] = await contrato.cotizar(BigInt(id), BigInt(kwh));
+    document.getElementById("q-kwh").textContent      = kwh + " kWh";
+    document.getElementById("q-unitario").textContent = parseFloat(ethers.formatEther(total / BigInt(kwh))).toFixed(6) + " ETH";
+    document.getElementById("q-comision").textContent = parseFloat(ethers.formatEther(com)).toFixed(6) + " ETH";
+    document.getElementById("q-total").textContent    = parseFloat(ethers.formatEther(total)).toFixed(6) + " ETH";
+    document.getElementById("quote-box").classList.add("visible");
+  } catch (e) {
+    toast("Error al cotizar: " + (e.reason || e.message), "error");
+  }
+}
+
+async function handleComprar() {
+  const id  = parseInt(document.getElementById("c-id").value);
+  const kwh = parseInt(document.getElementById("c-kwh").value);
+  if (!id || !kwh) { toast("Completa el listing ID y cantidad.", "error"); return; }
+  if (!contrato)   { toast("Conecta tu wallet primero.", "error"); return; }
+  try {
+    const [total] = await contrato.cotizar(BigInt(id), BigInt(kwh));
+    toast(`⏳ Comprando ${kwh} kWh...`, "info");
+    const tx = await contrato.comprarEnergia(BigInt(id), BigInt(kwh), { value: total });
+    toast("⏳ Confirmando pago...", "info");
+    await tx.wait();
+    toast(`⚡ ${kwh} kWh comprados y acreditados!`, "success");
+    actualizarBalance();
+    cargarListings();
+  } catch (e) {
+    if (e.code === 4001) toast("Transacción cancelada.", "info");
+    else toast("Error: " + (e.reason || e.message), "error");
+  }
+}
+
+async function actualizarBalance() {
+  if (!contrato) return;
+  try {
+    const bal = await contrato.miBalanceKwh();
+    document.getElementById("balance-kwh").textContent = Number(bal);
+  } catch {}
+}
+
+// ── SIMULADOR ──────────────────────────────────────────────
+function simular() {
+  const paneles  = parseInt(document.getElementById("sl-paneles").value);
+  const horas    = parseInt(document.getElementById("sl-horas").value);
+  const precio   = parseFloat(document.getElementById("sl-precio").value);
+  const consumo  = parseInt(document.getElementById("sl-consumo").value);
+
+  document.getElementById("s-paneles").textContent = paneles;
+  document.getElementById("s-horas").textContent   = horas;
+  document.getElementById("s-precio").textContent  = precio.toFixed(2);
+  document.getElementById("s-consumo").textContent = consumo;
+
+  // 1 panel ≈ 400W = 0.4 kW
+  const kwhDia   = paneles * 0.4 * horas;
+  const kwhMes   = Math.round(kwhDia * 30);
+  const excedente = Math.round(kwhMes * (1 - consumo / 100));
+  const ingreso   = excedente * precio * 0.92; // descontando comisión
+  const anual     = ingreso * 12;
+
+  document.getElementById("r-kwh").textContent      = kwhMes + " kWh";
+  document.getElementById("r-excedente").textContent = excedente + " kWh";
+  document.getElementById("r-ingreso").textContent  = "MXN $" + ingreso.toFixed(0);
+  document.getElementById("r-anual").textContent    = "MXN $" + anual.toFixed(0);
+}
+
+// Inicializar simulador
+simular();
+</script>
+</body>
+</html>
